@@ -27,7 +27,7 @@ class MoodyChart:
     D: float
     epsilon_values: tuple[float, ...] = DEFAULT_EPSILON_VALUES
     re_min: float = TURBULENT_LIMIT
-    re_max: float = 1e6
+    re_max: float = 1e8
     n_points: int = 50
 
     Re_values: np.ndarray = field(init=False)
