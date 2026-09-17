@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import math
+import warnings
 from dataclasses import dataclass, field
 
 import matplotlib.pyplot as plt
@@ -10,6 +11,7 @@ import numpy as np
 
 from pipe_flow import (
     LAMINAR_LIMIT,
+    MAX_VALIDATED_RELATIVE_ROUGHNESS,
     TURBULENT_LIMIT,
     friction_factor_colebrook,
     friction_factor_laminar,
@@ -37,6 +39,19 @@ class MoodyChart:
     boundary_points: list[tuple[float, float]] = field(init=False)
 
     def __post_init__(self) -> None:
+        if self.D <= 0:
+            raise ValueError("Pipe diameter D must be positive.")
+        for eps_rel in self.epsilon_values:
+            if eps_rel < 0:
+                raise ValueError(f"Relative roughness values must be non-negative (got {eps_rel}).")
+            if eps_rel > MAX_VALIDATED_RELATIVE_ROUGHNESS:
+                warnings.warn(
+                    f"Relative roughness epsilon/D={eps_rel} exceeds "
+                    f"{MAX_VALIDATED_RELATIVE_ROUGHNESS}, the upper limit the Colebrook equation "
+                    "has been validated for; that curve is a rough extrapolation.",
+                    stacklevel=2,
+                )
+
         self.Re_values = np.logspace(np.log10(self.re_min), np.log10(self.re_max), self.n_points)
         self.Re_values_laminar = np.logspace(np.log10(500), np.log10(LAMINAR_LIMIT), 30)
         self.f_values_laminar = [friction_factor_laminar(Re) for Re in self.Re_values_laminar]

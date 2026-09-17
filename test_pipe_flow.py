@@ -58,8 +58,27 @@ def test_full_pipe_calc_laminar():
         {"rho": 1000, "v": 2, "D": 0, "mu": 0.001, "L": 10, "epsilon": 0.0},
         {"rho": 1000, "v": 0, "D": 0.05, "mu": 0.001, "L": 10, "epsilon": 0.0},
         {"rho": 1000, "v": 2, "D": 0.05, "mu": 0.001, "L": 10, "epsilon": -0.001},
+        {"rho": 1000, "v": 2, "D": 0.05, "mu": 0.001, "L": 10, "epsilon": 0.05},  # epsilon >= D
     ],
 )
 def test_full_pipe_calc_rejects_invalid_input(kwargs):
     with pytest.raises(ValueError):
         full_pipe_calc(**kwargs)
+
+
+def test_full_pipe_calc_warns_on_excessive_relative_roughness():
+    # epsilon/D = 0.1 > 0.05, the Colebrook equation's validated limit.
+    with pytest.warns(UserWarning, match="Relative roughness"):
+        full_pipe_calc(rho=1000, v=2, D=0.05, mu=0.001, L=10, epsilon=0.005)
+
+
+def test_full_pipe_calc_warns_in_transitional_zone():
+    # rho*v*D/mu = 1000*0.06*0.05/0.001 = 3000, in the 2300-4000 transitional zone.
+    with pytest.warns(UserWarning, match="transitional zone"):
+        full_pipe_calc(rho=1000, v=0.06, D=0.05, mu=0.001, L=10, epsilon=0.00015)
+
+
+def test_full_pipe_calc_warns_above_max_validated_re():
+    # rho*v*D/mu well above 1e8.
+    with pytest.warns(UserWarning, match="exceeds"):
+        full_pipe_calc(rho=1000, v=5000, D=1, mu=1e-5, L=10, epsilon=0.00015)

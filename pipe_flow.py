@@ -6,10 +6,16 @@ and Darcy-Weisbach pressure drop.
 from __future__ import annotations
 
 import math
+import warnings
 from dataclasses import dataclass
 
 LAMINAR_LIMIT = 2300
 TURBULENT_LIMIT = 4000
+
+# The Colebrook equation is only experimentally validated within these bounds
+# (see e.g. White, Fluid Mechanics): 4000 <= Re <= 1e8, 0 <= epsilon/D <= 0.05.
+MAX_VALIDATED_RE = 1e8
+MAX_VALIDATED_RELATIVE_ROUGHNESS = 0.05
 
 
 def reynolds_number(rho: float, v: float, D: float, mu: float) -> float:
@@ -91,7 +97,13 @@ def full_pipe_calc(rho: float, v: float, D: float, mu: float, L: float, epsilon:
 
     Raises:
         ValueError: if any input is physically invalid (non-positive rho/D/mu/L/v,
-            or negative epsilon).
+            negative epsilon, or epsilon >= D).
+
+    Warns:
+        UserWarning: if the flow falls outside the range the Colebrook equation has
+            been experimentally validated for (transitional-zone Re, Re > 1e8, or
+            relative roughness epsilon/D > 0.05). The result is still returned as a
+            rough extrapolation.
     """
     if rho <= 0 or D <= 0 or mu <= 0 or L <= 0:
         raise ValueError("Density, diameter, viscosity, and length must be positive.")
@@ -99,9 +111,34 @@ def full_pipe_calc(rho: float, v: float, D: float, mu: float, L: float, epsilon:
         raise ValueError("Velocity must be positive.")
     if epsilon < 0:
         raise ValueError("Pipe roughness cannot be negative.")
+    if epsilon >= D:
+        raise ValueError("Pipe roughness (epsilon) cannot equal or exceed the pipe diameter (D).")
+
+    relative_roughness = epsilon / D
+    if relative_roughness > MAX_VALIDATED_RELATIVE_ROUGHNESS:
+        warnings.warn(
+            f"Relative roughness epsilon/D={relative_roughness:.4f} exceeds "
+            f"{MAX_VALIDATED_RELATIVE_ROUGHNESS}, the upper limit the Colebrook equation "
+            "has been validated for; treat the friction factor as a rough extrapolation.",
+            stacklevel=2,
+        )
 
     Re = reynolds_number(rho, v, D, mu)
     regime = flow_regime(Re)
+
+    if regime == "Transitional":
+        warnings.warn(
+            f"Re={Re:.0f} is in the transitional zone (2300-4000); no friction-factor "
+            "correlation is reliable here. Using the Colebrook correlation as a rough estimate.",
+            stacklevel=2,
+        )
+    elif Re > MAX_VALIDATED_RE:
+        warnings.warn(
+            f"Re={Re:.3g} exceeds {MAX_VALIDATED_RE:.0e}, the upper limit the Colebrook equation "
+            "has been validated for; treat the friction factor as a rough extrapolation.",
+            stacklevel=2,
+        )
+
     f = friction_factor(Re, D, epsilon)
     dP = pressure_drop(f, L, rho, v, D)
 
